@@ -111,7 +111,13 @@
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [currentUser, setCurrentUser] = useState(null);
       const [activeTab, setActiveTab] = useState('sensitivity');
-      const todayDate = new Date().toLocaleDateString('ko-KR');
+      
+      // 오늘의 실제 날짜 (자정이 지나면 업데이트 됨)
+      const [todayDate, setTodayDate] = useState(new Date().toLocaleDateString('ko-KR'));
+
+      // 가계부 탭의 일별 네비게이션을 위한 상태 추가
+      const [financeDate, setFinanceDate] = useState(new Date());
+      const financeDateString = financeDate.toLocaleDateString('ko-KR');
 
       // 실시간 데이터 상태
       const [sensitivity, setSensitivity] = useState(50);
@@ -127,20 +133,30 @@
       const [expenseAmount, setExpenseAmount] = useState('');
       const [expenseFilter, setExpenseFilter] = useState('ALL');
       
-      const [calendarFilter, setCalendarFilter] = useState('ALL'); // 달력 사용자 필터 추가
+      const [calendarFilter, setCalendarFilter] = useState('ALL');
       
-      // 가계부 수정 상태 추가
       const [editingExpenseId, setEditingExpenseId] = useState(null);
       const [editPlace, setEditPlace] = useState('');
       const [editDetail, setEditDetail] = useState('');
       const [editAmount, setEditAmount] = useState('');
       
       const [currentCalDate, setCurrentCalDate] = useState(new Date());
-      const [selectedDate, setSelectedDate] = useState(null); // 달력 일별 상세 조회를 위한 상태 추가
+      const [selectedDate, setSelectedDate] = useState(null);
 
       const [trashText, setTrashText] = useState('');
       const [trashedItems, setTrashedItems] = useState([]);
       const [isThrowing, setIsThrowing] = useState(false);
+
+      // 자정 업데이트 감지 타이머 (1분마다 체크하여 날짜가 바뀌면 새로고침)
+      useEffect(() => {
+        const timer = setInterval(() => {
+          const freshDate = new Date().toLocaleDateString('ko-KR');
+          if (freshDate !== todayDate) {
+            window.location.reload(); // 날짜가 바뀌면 깔끔하게 리로드하여 갱신!
+          }
+        }, 60000);
+        return () => clearInterval(timer);
+      }, [todayDate]);
 
       // --- Firebase Listener ---
       useEffect(() => {
@@ -212,61 +228,61 @@
         } catch (e) { console.error(e); }
       };
 
-      // 💡 더욱 세분화된 카테고리 추출 함수
-      const getCategory = (item) => {
-        if (/(코스트코|이마트|홈플러스|트레이더스|다이소|마트|생필품|장보기)/.test(item)) return '마트/생활';
-        if (/(주유|기름|주차|주차비|주유소|세차|톨게이트|하이패스|대리|차량|엔진오일)/.test(item)) return '주유/차량';
-        if (/(커피|카페|아아|라떼|스벅|스타벅스|메가|빽다방|디저트|케이크|빵)/.test(item)) return '커피/간식';
-        if (/(술|맥주|소주|노래방|호프|포차|유흥|클럽|바)/.test(item)) return '유흥';
-        if (/(밥|식당|돈까스|국밥|치킨|피자|버거|배달|마라탕|식비|초밥|저녁밥|저녁식사|점심밥|점심식사|아침밥|아침식사|야식|백반)/.test(item)) return '식비';
-        if (/(택시|버스|지하철|교통|기차|ktx)/i.test(item)) return '대중교통';
-        if (/(옷|신발|올영|올리브영|쇼핑|화장품)/.test(item)) return '쇼핑';
-        return '기타';
+      // 💡 우선순위를 장소 -> 세부내용 순으로 명확하게 처리하도록 수정된 카테고리 함수
+      const getCategory = (placeText, detailText) => {
+        const checkWord = (item) => {
+          if (!item) return '기타';
+          if (/(코스트코|이마트|홈플러스|트레이더스|다이소|마트|생필품|장보기)/.test(item)) return '마트/생활';
+          if (/(주유|기름|주차|주차비|주유소|세차|톨게이트|하이패스|대리|차량|엔진오일)/.test(item)) return '주유/차량';
+          if (/(커피|카페|아아|라떼|스벅|스타벅스|메가|빽다방|디저트|케이크|빵)/.test(item)) return '커피/간식';
+          if (/(술|맥주|소주|노래방|호프|포차|유흥|클럽|바)/.test(item)) return '유흥';
+          if (/(밥|식당|돈까스|국밥|치킨|피자|버거|배달|마라탕|식비|초밥|저녁|점심|아침|야식|백반)/.test(item)) return '식비';
+          if (/(택시|버스|지하철|교통|기차|ktx)/i.test(item)) return '대중교통';
+          if (/(옷|신발|올영|올리브영|쇼핑|화장품)/.test(item)) return '쇼핑';
+          return '기타';
+        };
+
+        // 장소(어디에 썼어?)를 먼저 확인하고, 기타가 아니면 그 카테고리를 따름
+        let finalCategory = checkWord(placeText);
+        if (finalCategory !== '기타') return finalCategory;
+        
+        // 장소에서 못 찾으면 세부내용으로 확인
+        finalCategory = checkWord(detailText);
+        return finalCategory;
       };
 
-      // 금액 입력 시 천 단위 콤마(,) 자동 추가 함수
       const handleAmountChange = (e) => {
-        const value = e.target.value.replace(/[^\d]/g, ''); // 숫자 이외의 문자 제거
-        if (value) {
-          setExpenseAmount(Number(value).toLocaleString('ko-KR'));
-        } else {
-          setExpenseAmount('');
-        }
+        const value = e.target.value.replace(/[^\d]/g, '');
+        if (value) { setExpenseAmount(Number(value).toLocaleString('ko-KR')); } 
+        else { setExpenseAmount(''); }
       };
 
-      // 수정 중 금액 입력 시 천 단위 콤마(,) 자동 추가 함수
       const handleEditAmountChange = (e) => {
         const value = e.target.value.replace(/[^\d]/g, '');
-        if (value) {
-          setEditAmount(Number(value).toLocaleString('ko-KR'));
-        } else {
-          setEditAmount('');
-        }
+        if (value) { setEditAmount(Number(value).toLocaleString('ko-KR')); } 
+        else { setEditAmount(''); }
       };
 
       const handleAddExpense = async () => {
         if (!expensePlace.trim() || !expenseAmount) return;
-        const numericAmount = parseInt(expenseAmount.replace(/,/g, ''), 10); // 콤마 제거 후 숫자로 변환
+        const numericAmount = parseInt(expenseAmount.replace(/,/g, ''), 10);
 
         try {
           await db.collection('expenses').add({
-            date: todayDate,
+            date: financeDateString, // 항상 현재 가계부에서 선택된 날짜에 저장!
             time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
             author: currentUser,
-            place: expensePlace, // 장소 추가
-            detail: expenseDetail, // 세부내용 추가
-            item: expensePlace, // 이전 데이터 호환용
+            place: expensePlace,
+            detail: expenseDetail,
+            item: expensePlace,
             amount: numericAmount,
-            category: getCategory(expensePlace + " " + expenseDetail), // 두 개 합쳐서 카테고리 분석
+            category: getCategory(expensePlace, expenseDetail),
             timestamp: Date.now()
           });
-          setExpensePlace('');
-          setExpenseDetail('');
-          setExpenseAmount('');
+          setExpensePlace(''); setExpenseDetail(''); setExpenseAmount('');
         } catch (e) { console.error(e); }
       };
 
-      // 수정 버튼 눌렀을 때 초기값 세팅
       const startEditExpense = (exp) => {
         setEditingExpenseId(exp.id);
         setEditPlace(exp.place || exp.item || '');
@@ -274,7 +290,6 @@
         setEditAmount(exp.amount.toLocaleString('ko-KR'));
       };
 
-      // 수정한 내용 저장하기
       const handleUpdateExpense = async (id) => {
         if (!editPlace.trim() || !editAmount) return;
         const numericAmount = parseInt(editAmount.replace(/,/g, ''), 10);
@@ -285,9 +300,9 @@
             detail: editDetail,
             item: editPlace,
             amount: numericAmount,
-            category: getCategory(editPlace + " " + editDetail)
+            category: getCategory(editPlace, editDetail)
           });
-          setEditingExpenseId(null); // 수정 모드 종료
+          setEditingExpenseId(null);
         } catch (e) { console.error("수정 오류:", e); }
       };
 
@@ -302,9 +317,9 @@
         setTimeout(() => setIsThrowing(false), 600);
       };
 
-      // --- 지출 계산 로직 (가계부용) ---
-      const todayExpenses = expenses.filter(exp => exp.date === todayDate);
-      const filteredExpenses = expenseFilter === 'ALL' ? todayExpenses : todayExpenses.filter(exp => exp.author === expenseFilter);
+      // --- 지출 계산 로직 (가계부 일별 보기용) ---
+      const dateExpenses = expenses.filter(exp => exp.date === financeDateString);
+      const filteredExpenses = expenseFilter === 'ALL' ? dateExpenses : dateExpenses.filter(exp => exp.author === expenseFilter);
       const totalExpense = filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0);
       const expensesByCategory = filteredExpenses.reduce((acc, curr) => {
         acc[curr.category] = (acc[curr.category] || 0) + curr.amount;
@@ -319,15 +334,12 @@
       const prevMonth = () => setCurrentCalDate(new Date(calYear, calMonth - 1, 1));
       const nextMonth = () => setCurrentCalDate(new Date(calYear, calMonth + 1, 1));
       
-      // 달력용 필터 적용
       const calendarFilteredExpenses = calendarFilter === 'ALL' ? expenses : expenses.filter(exp => exp.author === calendarFilter);
-
       const expensesByDate = calendarFilteredExpenses.reduce((acc, exp) => {
         acc[exp.date] = (acc[exp.date] || 0) + exp.amount;
         return acc;
       }, {});
 
-      // 달력: 이번 달 카테고리별 요약 추출 로직
       const monthlyExpensesByCategory = calendarFilteredExpenses.reduce((acc, exp) => {
         if (!exp.timestamp) return acc;
         const expD = new Date(exp.timestamp);
@@ -359,7 +371,7 @@
           <div className="w-full max-w-md bg-white shadow-xl flex flex-col relative overflow-hidden h-screen">
             <header className="bg-rose-400 text-white p-5 rounded-b-2xl shadow-md z-10 flex justify-between items-center shrink-0">
               <h1 className="text-2xl font-bold tracking-tight">감정 쓰레기통 🗑️</h1>
-              <button onClick={() => setIsLoggedIn(false)} className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1.5 hover:bg-white/30"><Users size={14} /> {currentUser} <LogOut size={12} className="ml-1 opacity-70" /></button>
+              <button onClick={() => setIsLoggedIn(false)} className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1.5 hover:bg-white/30 shrink-0 whitespace-nowrap"><Users size={14} /> {currentUser} <LogOut size={12} className="ml-1 opacity-70" /></button>
             </header>
 
             <main className="flex-1 overflow-y-auto p-5 pb-24 h-full relative">
@@ -375,15 +387,15 @@
                   <div className="space-y-3">
                     {sensitivityLog.filter(log => log.date === todayDate).map(log => (
                       <div key={log.id} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                        <span className="text-gray-500 text-sm">{log.time}</span>
+                        <span className="text-gray-500 text-sm whitespace-nowrap shrink-0">{log.time}</span>
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden shrink-0">
                               <div className={`h-full ${log.level > 80 ? 'bg-red-500' : 'bg-green-400'}`} style={{ width: `${log.level}%` }} />
                             </div>
-                            <span className="font-bold w-8 text-right text-sm">{log.level}</span>
+                            <span className="font-bold w-8 text-right text-sm shrink-0">{log.level}</span>
                           </div>
-                          <button onClick={() => handleDelete('sensitivityLogs', log.id)} className="text-gray-300 hover:text-red-500 p-1"><X size={16} /></button>
+                          <button onClick={() => handleDelete('sensitivityLogs', log.id)} className="text-gray-300 hover:text-red-500 p-1 shrink-0"><X size={16} /></button>
                         </div>
                       </div>
                     ))}
@@ -413,16 +425,19 @@
                   </div>
                   <div className="flex justify-center gap-2 mb-4">
                     {['ALL', '이서진', '이용상'].map(f => (
-                      <button key={f} onClick={() => setMealFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${mealFilter === f ? 'bg-orange-500 text-white shadow-md' : 'bg-orange-100 text-orange-500'}`}>{f === 'ALL' ? '전체' : f}</button>
+                      <button key={f} onClick={() => setMealFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${mealFilter === f ? 'bg-orange-500 text-white shadow-md' : 'bg-orange-100 text-orange-500'}`}>{f === 'ALL' ? '전체' : f}</button>
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     {meals.filter(m => m.date === todayDate && (mealFilter === 'ALL' || m.author === mealFilter)).map(m => (
                       <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
-                        <span className={`absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded text-white z-10 ${m.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{m.author}</span>
+                        <span className={`absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded text-white z-10 whitespace-nowrap ${m.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{m.author}</span>
                         <button onClick={() => handleDelete('meals', m.id)} className="absolute top-2 right-2 z-10 bg-white/80 p-1 rounded-full text-gray-500 hover:text-red-500"><X size={12} /></button>
                         {m.image ? <img src={m.image} className="w-full h-32 object-cover" /> : <div className="w-full h-32 bg-gray-100 flex items-center justify-center"><ImageIcon className="text-gray-300" /></div>}
-                        <div className="p-2"><p className="font-bold text-sm truncate">{m.menu}</p><p className="text-[10px] text-gray-400">{m.time}</p></div>
+                        <div className="p-2 min-w-0">
+                          <p className="font-bold text-sm truncate">{m.menu}</p>
+                          <p className="text-[10px] text-gray-400 whitespace-nowrap">{m.time}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -431,33 +446,44 @@
 
               {activeTab === 'finance' && (
                 <div className="animate-fade-in">
-                  <h2 className="text-xl font-bold mb-4 flex items-center text-blue-500"><Receipt className="mr-2" /> 가계부</h2>
+                  <h2 className="text-xl font-bold flex items-center text-blue-500"><Receipt className="mr-2" /> 가계부</h2>
+                  
+                  {/* 일별 네비게이터 추가 (날짜 이동) */}
+                  <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100 my-4">
+                    <button onClick={() => setFinanceDate(new Date(financeDate.getTime() - 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeft size={20} className="text-blue-500" /></button>
+                    <div className="text-center font-bold text-gray-800">
+                      {financeDateString === todayDate ? '오늘' : financeDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                    </div>
+                    <button onClick={() => setFinanceDate(new Date(financeDate.getTime() + 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} className="text-blue-500" /></button>
+                  </div>
+
                   <div className="flex justify-center gap-2 mb-4">
                     {['ALL', '이서진', '이용상'].map(f => (
-                      <button key={f} onClick={() => setExpenseFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${expenseFilter === f ? 'bg-blue-500 text-white shadow-md' : 'bg-blue-100 text-blue-500'}`}>{f === 'ALL' ? '전체' : f}</button>
+                      <button key={f} onClick={() => setExpenseFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${expenseFilter === f ? 'bg-blue-500 text-white shadow-md' : 'bg-blue-100 text-blue-500'}`}>{f === 'ALL' ? '전체' : f}</button>
                     ))}
                   </div>
                   <div className="bg-blue-500 text-white rounded-2xl p-6 mb-6 shadow-md">
-                    <p className="text-blue-100 text-sm mb-1">{expenseFilter === 'ALL' ? '오늘 총' : `오늘 ${expenseFilter}`} 지출</p>
+                    <p className="text-blue-100 text-sm mb-1">{financeDateString === todayDate ? '오늘' : '해당일'} {expenseFilter === 'ALL' ? '총' : expenseFilter} 지출</p>
                     <div className="text-4xl font-extrabold mb-4">{totalExpense.toLocaleString()} <span className="text-xl font-medium">원</span></div>
                     {Object.keys(expensesByCategory).length > 0 && (
                       <div className="grid grid-cols-2 gap-2 text-xs bg-blue-600/50 p-3 rounded-xl">
                         {Object.entries(expensesByCategory).map(([cat, amt]) => (
-                          <div key={cat} className="flex justify-between"><span>{cat}</span><span className="font-bold">{amt.toLocaleString()}원</span></div>
+                          <div key={cat} className="flex justify-between items-center gap-1 min-w-0">
+                            <span className="truncate">{cat}</span><span className="font-bold whitespace-nowrap shrink-0">{amt.toLocaleString()}원</span>
+                          </div>
                         ))}
                       </div>
                     )}
                   </div>
                   
-                  {/* 가계부 입력 폼 (UI 변경) */}
                   <div className="bg-blue-50 rounded-2xl p-4 mb-6 border border-blue-100">
                     <p className="text-xs text-blue-500 font-bold mb-2 ml-1">* 마트, 주유, 배달 등 키워드 자동 분류</p>
                     <div className="flex flex-col gap-2">
-                      <input type="text" placeholder="어디에 썼어? (예: 코스트코, 주유소)" value={expensePlace} onChange={(e) => setExpensePlace(e.target.value)} className="w-full p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
-                      <input type="text" placeholder="세부내용 (예: 장보기, 점심식사)" value={expenseDetail} onChange={(e) => setExpenseDetail(e.target.value)} className="w-full p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
+                      <input type="text" placeholder="어디에 썼어? (예: 코스트코, 주차비)" value={expensePlace} onChange={(e) => setExpensePlace(e.target.value)} className="w-full p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
+                      <input type="text" placeholder="세부내용 (예: 장보기, 다이소)" value={expenseDetail} onChange={(e) => setExpenseDetail(e.target.value)} className="w-full p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
                       <div className="flex gap-2">
                         <input type="text" placeholder="금액 (예: 10,000)" value={expenseAmount} onChange={handleAmountChange} className="flex-1 p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
-                        <button onClick={handleAddExpense} className="bg-blue-500 hover:bg-blue-600 text-white px-5 rounded-xl transition-colors"><Plus /></button>
+                        <button onClick={handleAddExpense} className="bg-blue-500 hover:bg-blue-600 text-white px-5 rounded-xl transition-colors shrink-0"><Plus /></button>
                       </div>
                     </div>
                   </div>
@@ -466,39 +492,40 @@
                     {filteredExpenses.map(exp => (
                       <div key={exp.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                         {editingExpenseId === exp.id ? (
-                          /* 수정 모드 화면 */
                           <div className="flex flex-col gap-2">
                             <input type="text" value={editPlace} onChange={(e) => setEditPlace(e.target.value)} className="w-full p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="어디에 썼어?" />
                             <input type="text" value={editDetail} onChange={(e) => setEditDetail(e.target.value)} className="w-full p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="세부내용" />
                             <div className="flex gap-2">
                               <input type="text" value={editAmount} onChange={handleEditAmountChange} className="flex-1 p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="금액" />
-                              <button onClick={() => handleUpdateExpense(exp.id)} className="bg-green-500 hover:bg-green-600 text-white px-3 rounded-lg transition-colors"><Check size={18} /></button>
-                              <button onClick={() => setEditingExpenseId(null)} className="bg-gray-400 hover:bg-gray-500 text-white px-3 rounded-lg transition-colors"><X size={18} /></button>
+                              <button onClick={() => handleUpdateExpense(exp.id)} className="bg-green-500 hover:bg-green-600 text-white px-3 rounded-lg transition-colors shrink-0"><Check size={18} /></button>
+                              <button onClick={() => setEditingExpenseId(null)} className="bg-gray-400 hover:bg-gray-500 text-white px-3 rounded-lg transition-colors shrink-0"><X size={18} /></button>
                             </div>
                           </div>
                         ) : (
-                          /* 기본 화면 */
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${exp.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{exp.author}</span>
-                              <div>
-                                <p className="font-bold text-sm text-gray-800">
+                          <div className="flex justify-between items-center w-full gap-2">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded text-white whitespace-nowrap ${exp.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{exp.author}</span>
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm text-gray-800 truncate leading-tight">
                                   {exp.place || exp.item}
-                                  {exp.detail && <span className="text-[11px] text-gray-500 font-normal ml-1">({exp.detail})</span>}
-                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1">{exp.category}</span>
+                                  {exp.detail && <span className="text-[11px] text-gray-500 font-normal ml-1 shrink-0">({exp.detail})</span>}
+                                  <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1 whitespace-nowrap inline-block shrink-0 align-middle">{exp.category}</span>
                                 </p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{exp.time}</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5 whitespace-nowrap truncate">{exp.time}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 font-bold text-blue-500 text-sm">
+                            <div className="flex items-center gap-1 font-bold text-blue-500 text-sm whitespace-nowrap shrink-0">
                               <span className="mr-1">-{exp.amount.toLocaleString()}원</span>
-                              <button onClick={() => startEditExpense(exp)} className="text-gray-300 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors"><Pencil size={14} /></button>
-                              <button onClick={() => handleDelete('expenses', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors"><X size={14} /></button>
+                              <button onClick={() => startEditExpense(exp)} className="text-gray-300 hover:text-blue-500 p-1.5 rounded-full hover:bg-blue-50 transition-colors shrink-0"><Pencil size={14} /></button>
+                              <button onClick={() => handleDelete('expenses', exp.id)} className="text-gray-300 hover:text-red-500 p-1.5 rounded-full hover:bg-red-50 transition-colors shrink-0"><X size={14} /></button>
                             </div>
                           </div>
                         )}
                       </div>
                     ))}
+                    {filteredExpenses.length === 0 && (
+                      <div className="text-center py-8 text-gray-400 text-sm">지출이 없어요! 👏</div>
+                    )}
                   </div>
                 </div>
               )}
@@ -507,28 +534,26 @@
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-500"><CalendarIcon className="mr-2" /> 지출 달력</h2>
                   
-                  {/* 달력 사용자별 필터 추가 */}
                   <div className="flex justify-center gap-2 mb-4">
                     {['ALL', '이서진', '이용상'].map(f => (
                       <button 
                         key={f} 
                         onClick={() => setCalendarFilter(f)} 
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${calendarFilter === f ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-200'}`}
+                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${calendarFilter === f ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-200'}`}
                       >
                         {f === 'ALL' ? '전체 보기' : `${f} 지출`}
                       </button>
                     ))}
                   </div>
 
-                  {/* 월별 요약 통계 */}
                   <div className="bg-indigo-500 text-white rounded-2xl p-5 mb-5 shadow-md">
                     <p className="text-indigo-100 text-sm mb-1">{calYear}년 {calMonth + 1}월 {calendarFilter === 'ALL' ? '총' : calendarFilter} 지출액</p>
                     <div className="text-3xl font-extrabold mb-4">{totalMonthlyExpense.toLocaleString()} <span className="text-lg font-medium">원</span></div>
                     {Object.keys(monthlyExpensesByCategory).length > 0 ? (
                       <div className="grid grid-cols-2 gap-2 text-xs bg-indigo-600/50 p-3 rounded-xl">
                         {Object.entries(monthlyExpensesByCategory).map(([cat, amt]) => (
-                          <div key={cat} className="flex justify-between items-center">
-                            <span className="text-indigo-200">{cat}</span><span className="font-bold">{amt.toLocaleString()}원</span>
+                          <div key={cat} className="flex justify-between items-center gap-1 min-w-0">
+                            <span className="text-indigo-200 truncate">{cat}</span><span className="font-bold whitespace-nowrap shrink-0">{amt.toLocaleString()}원</span>
                           </div>
                         ))}
                       </div>
@@ -540,7 +565,7 @@
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
                     <div className="flex justify-between items-center mb-4">
                       <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeft size={20} /></button>
-                      <h3 className="font-bold text-lg text-gray-800">{calYear}년 {calMonth + 1}월</h3>
+                      <h3 className="font-bold text-lg text-gray-800 whitespace-nowrap">{calYear}년 {calMonth + 1}월</h3>
                       <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} /></button>
                     </div>
                     <div className="grid grid-cols-7 gap-1 mb-2">
@@ -567,30 +592,29 @@
                 </div>
               )}
 
-              {/* 일별 지출 상세 모달 (팝업) */}
+              {/* 일별 지출 상세 모달 */}
               {selectedDate && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-5" onClick={() => setSelectedDate(null)}>
                   <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-fade-in max-h-[80vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-5 shrink-0">
                       <h3 className="font-extrabold text-lg text-indigo-500">{selectedDate} 상세 내역</h3>
-                      <button onClick={() => setSelectedDate(null)} className="p-1 hover:bg-gray-100 rounded-full transition-colors"><X size={20} className="text-gray-500" /></button>
+                      <button onClick={() => setSelectedDate(null)} className="p-1 hover:bg-gray-100 rounded-full transition-colors shrink-0"><X size={20} className="text-gray-500" /></button>
                     </div>
                     <div className="space-y-3">
                       {calendarFilteredExpenses.filter(exp => exp.date === selectedDate).length > 0 ? (
                         calendarFilteredExpenses.filter(exp => exp.date === selectedDate).map(exp => (
-                          <div key={exp.id} className="flex justify-between items-center bg-gray-50 p-3.5 rounded-xl border border-gray-100">
-                            <div className="flex items-center gap-3">
-                              <span className={`text-[10px] font-bold px-2 py-1 rounded-md text-white ${exp.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{exp.author}</span>
-                              <div>
-                                {/* 달력 상세 내역 랜더링 */}
-                                <p className="font-bold text-sm text-gray-800">
+                          <div key={exp.id} className="flex justify-between items-center bg-gray-50 p-3.5 rounded-xl border border-gray-100 gap-2">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <span className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-md text-white whitespace-nowrap ${exp.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{exp.author}</span>
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm text-gray-800 truncate">
                                   {exp.place || exp.item}
-                                  {exp.detail && <span className="text-[11px] text-gray-500 font-normal ml-1">({exp.detail})</span>}
-                                  <span className="text-[10px] bg-white border border-gray-200 text-gray-500 px-1.5 py-0.5 rounded ml-1">{exp.category}</span>
+                                  {exp.detail && <span className="text-[11px] text-gray-500 font-normal ml-1 shrink-0">({exp.detail})</span>}
+                                  <span className="shrink-0 text-[10px] bg-white border border-gray-200 text-gray-500 px-1.5 py-0.5 rounded ml-1 whitespace-nowrap inline-block">{exp.category}</span>
                                 </p>
                               </div>
                             </div>
-                            <span className="font-bold text-blue-500 text-sm">-{exp.amount.toLocaleString()}원</span>
+                            <span className="shrink-0 font-bold text-blue-500 text-sm whitespace-nowrap">-{exp.amount.toLocaleString()}원</span>
                           </div>
                         ))
                       ) : (
@@ -607,7 +631,7 @@
                   <div className={`transition-all duration-500 ${isThrowing ? 'scale-75 opacity-0' : 'scale-100'}`}>
                     <div className="bg-purple-50 p-2 rounded-2xl border border-purple-100 mb-6">
                       <textarea rows="4" placeholder="쏟아내버려!!!" value={trashText} onChange={(e) => setTrashText(e.target.value)} className="w-full p-4 bg-transparent outline-none text-gray-700 resize-none" />
-                      <div className="flex justify-end p-2"><button onClick={handleThrowAway} className="bg-purple-500 text-white px-5 py-2 rounded-xl font-bold flex items-center shadow-sm hover:bg-purple-600"><Send size={16} className="mr-2" /> 버리기</button></div>
+                      <div className="flex justify-end p-2"><button onClick={handleThrowAway} className="bg-purple-500 text-white px-5 py-2 rounded-xl font-bold flex items-center shadow-sm hover:bg-purple-600 transition-colors"><Send size={16} className="mr-2" /> 버리기</button></div>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center opacity-40">
@@ -618,11 +642,11 @@
             </main>
 
             <nav className="bg-white border-t flex justify-around p-3 pb-safe absolute bottom-0 w-full z-20 shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
-              <button onClick={() => setActiveTab('sensitivity')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='sensitivity'?'text-rose-500':'text-gray-400 hover:text-gray-600'}`}><Activity /><span className="text-[10px] mt-1 font-medium">예민함</span></button>
-              <button onClick={() => setActiveTab('lunch')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='lunch'?'text-orange-500':'text-gray-400 hover:text-gray-600'}`}><Camera /><span className="text-[10px] mt-1 font-medium">식단</span></button>
-              <button onClick={() => setActiveTab('finance')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='finance'?'text-blue-500':'text-gray-400 hover:text-gray-600'}`}><Receipt /><span className="text-[10px] mt-1 font-medium">가계부</span></button>
-              <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='calendar'?'text-indigo-500':'text-gray-400 hover:text-gray-600'}`}><CalendarIcon /><span className="text-[10px] mt-1 font-medium">달력</span></button>
-              <button onClick={() => setActiveTab('trash')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='trash'?'text-purple-500':'text-gray-400 hover:text-gray-600'}`}><Trash2 /><span className="text-[10px] mt-1 font-medium">버리기</span></button>
+              <button onClick={() => setActiveTab('sensitivity')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='sensitivity'?'text-rose-500':'text-gray-400 hover:text-gray-600'}`}><Activity /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">예민함</span></button>
+              <button onClick={() => setActiveTab('lunch')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='lunch'?'text-orange-500':'text-gray-400 hover:text-gray-600'}`}><Camera /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">식단</span></button>
+              <button onClick={() => setActiveTab('finance')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='finance'?'text-blue-500':'text-gray-400 hover:text-gray-600'}`}><Receipt /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">가계부</span></button>
+              <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='calendar'?'text-indigo-500':'text-gray-400 hover:text-gray-600'}`}><CalendarIcon /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">달력</span></button>
+              <button onClick={() => setActiveTab('trash')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='trash'?'text-purple-500':'text-gray-400 hover:text-gray-600'}`}><Trash2 /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">버리기</span></button>
             </nav>
           </div>
         </div>
