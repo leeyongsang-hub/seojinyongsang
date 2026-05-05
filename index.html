@@ -127,6 +127,10 @@
       const [selectedImage, setSelectedImage] = useState(null);
       const [mealFilter, setMealFilter] = useState('ALL');
       
+      // 식단 탭의 일별 네비게이션을 위한 상태 추가
+      const [mealDate, setMealDate] = useState(new Date());
+      const mealDateString = mealDate.toLocaleDateString('ko-KR');
+      
       const [expenses, setExpenses] = useState([]);
       const [expensePlace, setExpensePlace] = useState('');
       const [expenseDetail, setExpenseDetail] = useState('');
@@ -217,7 +221,7 @@
         if (!selectedImage && !menuInput.trim()) return;
         try {
           await db.collection('meals').add({
-            date: todayDate,
+            date: mealDateString,
             time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
             author: currentUser,
             image: selectedImage || null,
@@ -405,7 +409,17 @@
 
               {activeTab === 'lunch' && (
                 <div className="animate-fade-in">
-                  <h2 className="text-xl font-bold mb-4 flex items-center text-orange-500"><Camera className="mr-2" /> 오늘의 식단</h2>
+                  <h2 className="text-xl font-bold mb-4 flex items-center text-orange-500"><Camera className="mr-2" /> 식단 기록</h2>
+                  
+                  {/* 일별 네비게이터 추가 (날짜 이동) */}
+                  <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100 my-4">
+                    <button onClick={() => setMealDate(new Date(mealDate.getTime() - 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeft size={20} className="text-orange-500" /></button>
+                    <div className="text-center font-bold text-gray-800">
+                      {mealDateString === todayDate ? '오늘' : mealDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                    </div>
+                    <button onClick={() => setMealDate(new Date(mealDate.getTime() + 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} className="text-orange-500" /></button>
+                  </div>
+
                   <div className="bg-orange-50 rounded-2xl p-5 mb-6 border border-orange-100">
                     <div className="mb-4 relative">
                       {selectedImage ? (
@@ -429,7 +443,7 @@
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {meals.filter(m => m.date === todayDate && (mealFilter === 'ALL' || m.author === mealFilter)).map(m => (
+                    {meals.filter(m => m.date === mealDateString && (mealFilter === 'ALL' || m.author === mealFilter)).map(m => (
                       <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative">
                         <span className={`absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded text-white z-10 whitespace-nowrap ${m.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{m.author}</span>
                         <button onClick={() => handleDelete('meals', m.id)} className="absolute top-2 right-2 z-10 bg-white/80 p-1 rounded-full text-gray-500 hover:text-red-500"><X size={12} /></button>
@@ -440,6 +454,11 @@
                         </div>
                       </div>
                     ))}
+                    {meals.filter(m => m.date === mealDateString && (mealFilter === 'ALL' || m.author === mealFilter)).length === 0 && (
+                      <div className="col-span-2 text-center py-8 text-gray-400 text-sm">
+                        이 날은 기록된 식사가 없어요! 🍽️
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
