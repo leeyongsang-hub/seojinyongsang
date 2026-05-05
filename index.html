@@ -152,6 +152,14 @@
         setExpenses(expenses.filter(exp => exp.id !== id));
       };
 
+      const handleDeleteSensitivity = (id) => {
+        setSensitivityLog(sensitivityLog.filter(log => log.id !== id));
+      };
+
+      const handleDeleteMeal = (id) => {
+        setMeals(meals.filter(meal => meal.id !== id));
+      };
+
       const todayExpenses = expenses.filter(exp => exp.date === todayDate);
       const filteredExpenses = expenseFilter === 'ALL' 
         ? todayExpenses 
@@ -274,14 +282,22 @@
                       {sensitivityLog.filter(log => log.date === todayDate).map(log => (
                         <div key={log.id} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                           <span className="text-gray-500 text-sm">{log.time}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${log.level > 80 ? 'bg-red-500' : log.level > 60 ? 'bg-orange-400' : log.level > 40 ? 'bg-yellow-400' : 'bg-green-400'}`}
-                                style={{ width: `${log.level}%` }}
-                              />
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 sm:w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full ${log.level > 80 ? 'bg-red-500' : log.level > 60 ? 'bg-orange-400' : log.level > 40 ? 'bg-yellow-400' : 'bg-green-400'}`}
+                                  style={{ width: `${log.level}%` }}
+                                />
+                              </div>
+                              <span className="font-bold w-8 text-right">{log.level}</span>
                             </div>
-                            <span className="font-bold w-8 text-right">{log.level}</span>
+                            <button 
+                              onClick={() => handleDeleteSensitivity(log.id)}
+                              className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"
+                            >
+                              <X size={16} />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -352,9 +368,15 @@
                     <div className="grid grid-cols-2 gap-3">
                       {meals.filter(meal => meal.date === todayDate && (mealFilter === 'ALL' || meal.author === mealFilter)).map(meal => (
                         <div key={meal.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col relative">
-                          <span className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-md z-10 text-white ${meal.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>
+                          <span className={`absolute top-2 left-2 text-xs font-bold px-2 py-1 rounded-md z-10 text-white shadow-sm ${meal.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>
                             {meal.author}
                           </span>
+                          <button 
+                            onClick={() => handleDeleteMeal(meal.id)}
+                            className="absolute top-2 right-2 z-10 bg-white/80 text-gray-500 hover:text-red-500 hover:bg-white p-1.5 rounded-full shadow-sm backdrop-blur-sm transition-all"
+                          >
+                            <X size={14} />
+                          </button>
                           {meal.image ? (
                             <img src={meal.image} alt={meal.menu} className="w-full h-32 object-cover" />
                           ) : (
