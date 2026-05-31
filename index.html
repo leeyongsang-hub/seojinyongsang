@@ -81,6 +81,9 @@
     const LogOut = (p) => <Icon {...p} path={<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></>} />;
     const Pencil = (p) => <Icon {...p} path={<><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></>} />;
     const Check = (p) => <Icon {...p} path={<><polyline points="20 6 9 17 4 12"></polyline></>} />;
+    // 다이어터 덤벨 아이콘
+    const Dumbbell = (p) => <Icon {...p} path={<><path d="m14.4 14.4-4.8-4.8"/><path d="M7.3 11.5 8.5 12.7c.6.6 1.5.6 2.1 0l.4-.4c.6-.6.6-1.5 0-2.1L9.8 9"/><path d="M12.5 16.7 13.7 17.9c.6.6 1.5.6 2.1 0l.4-.4c.6-.6.6-1.5 0-2.1l-1.2-1.2"/><path d="m3.6 7.8 4.2-4.2"/><path d="m16.2 20.4 4.2-4.2"/><path d="M2 5.5l1.4 1.4c.8.8 2 .8 2.8 0L7.5 5.5c.8-.8.8-2 0-2.8L6.1 1.3"/><path d="M17.9 22.7l1.4 1.4c.8.8 2 .8 2.8 0l1.3-1.3c.8-.8.8-2 0-2.8l-1.4-1.4"/></>} />;
+
 
     // --- 이미지 압축 유틸리티 ---
     const compressImage = (file, maxWidth = 600, maxHeight = 600, quality = 0.6) => {
@@ -110,35 +113,32 @@
     function App() {
       const [isLoggedIn, setIsLoggedIn] = useState(false);
       const [currentUser, setCurrentUser] = useState(null);
-      const [activeTab, setActiveTab] = useState('sensitivity');
+      const [activeTab, setActiveTab] = useState('sensitivity'); // 탭: sensitivity, lunch, finance, calendar, dieter, trash
       
-      // 오늘의 실제 날짜 (자정이 지나면 업데이트 됨)
       const [todayDate, setTodayDate] = useState(new Date().toLocaleDateString('ko-KR'));
 
-      // 가계부 탭의 일별 네비게이션을 위한 상태 추가
+      const [mealDate, setMealDate] = useState(new Date());
+      const mealDateString = mealDate.toLocaleDateString('ko-KR');
+      
       const [financeDate, setFinanceDate] = useState(new Date());
       const financeDateString = financeDate.toLocaleDateString('ko-KR');
 
-      // 실시간 데이터 상태
+      // 1. 예민함
       const [sensitivity, setSensitivity] = useState(50);
       const [sensitivityLog, setSensitivityLog] = useState([]);
+      
+      // 2. 식단
       const [meals, setMeals] = useState([]);
       const [menuInput, setMenuInput] = useState('');
       const [selectedImage, setSelectedImage] = useState(null);
       const [mealFilter, setMealFilter] = useState('ALL');
       
-      // 식단 탭의 일별 네비게이션을 위한 상태 추가
-      const [mealDate, setMealDate] = useState(new Date());
-      const mealDateString = mealDate.toLocaleDateString('ko-KR');
-      
+      // 3. 가계부
       const [expenses, setExpenses] = useState([]);
       const [expensePlace, setExpensePlace] = useState('');
       const [expenseDetail, setExpenseDetail] = useState('');
       const [expenseAmount, setExpenseAmount] = useState('');
       const [expenseFilter, setExpenseFilter] = useState('ALL');
-      
-      const [calendarFilter, setCalendarFilter] = useState('ALL');
-      
       const [editingExpenseId, setEditingExpenseId] = useState(null);
       const [editPlace, setEditPlace] = useState('');
       const [editDetail, setEditDetail] = useState('');
@@ -146,18 +146,31 @@
       
       const [currentCalDate, setCurrentCalDate] = useState(new Date());
       const [selectedDate, setSelectedDate] = useState(null);
+      const [calendarFilter, setCalendarFilter] = useState('ALL');
 
+      // 4. 다이어터 (무모한도전)
+      const [dieterGoals, setDieterGoals] = useState({}); // { '이서진': {startWeight, targetWeight, targetDate} }
+      const [dieterLogs, setDieterLogs] = useState([]);
+      
+      const [goalStartWeight, setGoalStartWeight] = useState('');
+      const [goalTargetWeight, setGoalTargetWeight] = useState('');
+      const [goalTargetDate, setGoalTargetDate] = useState('');
+      
+      const [dieterImage, setDieterImage] = useState(null);
+      const [dieterWeightInput, setDieterWeightInput] = useState('');
+      const [dieterWorkoutChecked, setDieterWorkoutChecked] = useState(false);
+      const [dieterFilter, setDieterFilter] = useState('ALL');
+
+      // 5. 쓰레기통
       const [trashText, setTrashText] = useState('');
       const [trashedItems, setTrashedItems] = useState([]);
       const [isThrowing, setIsThrowing] = useState(false);
 
-      // 자정 업데이트 감지 타이머 (1분마다 체크하여 날짜가 바뀌면 새로고침)
+      // 자정 업데이트 감지 타이머
       useEffect(() => {
         const timer = setInterval(() => {
           const freshDate = new Date().toLocaleDateString('ko-KR');
-          if (freshDate !== todayDate) {
-            window.location.reload(); // 날짜가 바뀌면 깔끔하게 리로드하여 갱신!
-          }
+          if (freshDate !== todayDate) { window.location.reload(); }
         }, 60000);
         return () => clearInterval(timer);
       }, [todayDate]);
@@ -190,30 +203,39 @@
             setTrashedItems(data);
         }, err => console.error(err));
 
-        return () => { unsubSens(); unsubMeals(); unsubExp(); unsubTrash(); };
+        const unsubDieterGoals = db.collection('dieterGoals').onSnapshot(snap => {
+            const goals = {};
+            snap.docs.forEach(doc => { goals[doc.id] = doc.data(); });
+            setDieterGoals(goals);
+        }, err => console.error(err));
+
+        const unsubDieterLogs = db.collection('dieterLogs').onSnapshot(snap => {
+            const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // 최신순 정렬
+            setDieterLogs(data);
+        }, err => console.error(err));
+
+        return () => { unsubSens(); unsubMeals(); unsubExp(); unsubTrash(); unsubDieterGoals(); unsubDieterLogs(); };
       }, [isLoggedIn]);
 
-      // --- DB 작업 핸들러 ---
+      // --- 핸들러 함수들 ---
       const handleSaveSensitivity = async () => {
         try {
           await db.collection('sensitivityLogs').add({
-            date: todayDate,
-            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-            level: sensitivity,
-            timestamp: Date.now()
+            date: todayDate, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), level: sensitivity, timestamp: Date.now()
           });
-        } catch (e) { alert("저장에 실패했습니다. Firebase 규칙을 확인해주세요."); }
+        } catch (e) { alert("저장 실패!"); }
       };
 
       const handleDelete = async (collection, id) => {
         try { await db.collection(collection).doc(id).delete(); } catch (e) { console.error(e); }
       };
 
-      const handleImageUpload = async (e) => {
+      const handleImageUpload = async (e, setter) => {
         const file = e.target.files[0];
         if (file) {
           const compressed = await compressImage(file);
-          setSelectedImage(compressed);
+          setter(compressed);
         }
       };
 
@@ -221,18 +243,12 @@
         if (!selectedImage && !menuInput.trim()) return;
         try {
           await db.collection('meals').add({
-            date: mealDateString,
-            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-            author: currentUser,
-            image: selectedImage || null,
-            menu: menuInput || '이름 없는 메뉴',
-            timestamp: Date.now()
+            date: mealDateString, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), author: currentUser, image: selectedImage || null, menu: menuInput || '이름 없는 메뉴', timestamp: Date.now()
           });
           setSelectedImage(null); setMenuInput('');
         } catch (e) { console.error(e); }
       };
 
-      // 💡 우선순위를 장소 -> 세부내용 순으로 명확하게 처리하도록 수정된 카테고리 함수
       const getCategory = (placeText, detailText) => {
         const checkWord = (item) => {
           if (!item) return '기타';
@@ -245,43 +261,23 @@
           if (/(옷|신발|올영|올리브영|쇼핑|화장품)/.test(item)) return '쇼핑';
           return '기타';
         };
-
-        // 장소(어디에 썼어?)를 먼저 확인하고, 기타가 아니면 그 카테고리를 따름
         let finalCategory = checkWord(placeText);
         if (finalCategory !== '기타') return finalCategory;
-        
-        // 장소에서 못 찾으면 세부내용으로 확인
         finalCategory = checkWord(detailText);
         return finalCategory;
       };
 
-      const handleAmountChange = (e) => {
+      const handleAmountChange = (e, setter) => {
         const value = e.target.value.replace(/[^\d]/g, '');
-        if (value) { setExpenseAmount(Number(value).toLocaleString('ko-KR')); } 
-        else { setExpenseAmount(''); }
-      };
-
-      const handleEditAmountChange = (e) => {
-        const value = e.target.value.replace(/[^\d]/g, '');
-        if (value) { setEditAmount(Number(value).toLocaleString('ko-KR')); } 
-        else { setEditAmount(''); }
+        setter(value ? Number(value).toLocaleString('ko-KR') : '');
       };
 
       const handleAddExpense = async () => {
         if (!expensePlace.trim() || !expenseAmount) return;
         const numericAmount = parseInt(expenseAmount.replace(/,/g, ''), 10);
-
         try {
           await db.collection('expenses').add({
-            date: financeDateString, // 항상 현재 가계부에서 선택된 날짜에 저장!
-            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-            author: currentUser,
-            place: expensePlace,
-            detail: expenseDetail,
-            item: expensePlace,
-            amount: numericAmount,
-            category: getCategory(expensePlace, expenseDetail),
-            timestamp: Date.now()
+            date: financeDateString, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), author: currentUser, place: expensePlace, detail: expenseDetail, item: expensePlace, amount: numericAmount, category: getCategory(expensePlace, expenseDetail), timestamp: Date.now()
           });
           setExpensePlace(''); setExpenseDetail(''); setExpenseAmount('');
         } catch (e) { console.error(e); }
@@ -289,39 +285,78 @@
 
       const startEditExpense = (exp) => {
         setEditingExpenseId(exp.id);
-        setEditPlace(exp.place || exp.item || '');
-        setEditDetail(exp.detail || '');
-        setEditAmount(exp.amount.toLocaleString('ko-KR'));
+        setEditPlace(exp.place || exp.item || ''); setEditDetail(exp.detail || ''); setEditAmount(exp.amount.toLocaleString('ko-KR'));
       };
 
       const handleUpdateExpense = async (id) => {
         if (!editPlace.trim() || !editAmount) return;
         const numericAmount = parseInt(editAmount.replace(/,/g, ''), 10);
-        
         try {
           await db.collection('expenses').doc(id).update({
-            place: editPlace,
-            detail: editDetail,
-            item: editPlace,
-            amount: numericAmount,
-            category: getCategory(editPlace, editDetail)
+            place: editPlace, detail: editDetail, item: editPlace, amount: numericAmount, category: getCategory(editPlace, editDetail)
           });
           setEditingExpenseId(null);
-        } catch (e) { console.error("수정 오류:", e); }
+        } catch (e) { console.error(e); }
       };
+
+      // --- 다이어터 핸들러 ---
+      const handleSetDieterGoal = async () => {
+        if (!goalStartWeight || !goalTargetWeight || !goalTargetDate) return;
+        try {
+          await db.collection('dieterGoals').doc(currentUser).set({
+            startWeight: Number(goalStartWeight),
+            targetWeight: Number(goalTargetWeight),
+            targetDate: goalTargetDate,
+            updatedAt: Date.now()
+          });
+        } catch (e) { console.error(e); }
+      };
+
+      const handleAddDieterLog = async () => {
+        if (!dieterWeightInput || !dieterImage) return alert("몸무게와 사진은 필수입니다!");
+        try {
+          await db.collection('dieterLogs').add({
+            date: todayDate,
+            time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+            author: currentUser,
+            weight: Number(dieterWeightInput),
+            image: dieterImage,
+            workoutDone: dieterWorkoutChecked,
+            timestamp: Date.now()
+          });
+          setDieterImage(null); setDieterWeightInput(''); setDieterWorkoutChecked(false);
+        } catch (e) { console.error(e); }
+      };
+
+      // 다이어터 디데이 및 증감 계산 로직
+      const calculateDDay = (targetDateStr) => {
+        if(!targetDateStr) return '';
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const target = new Date(targetDateStr);
+        const diff = target - today;
+        const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+        if (days > 0) return `D-${days}`;
+        if (days === 0) return `D-Day`;
+        return `D+${Math.abs(days)}`;
+      };
+
+      // 이전 기록과 비교하기 위한 로직
+      const getPreviousWeight = (author, currentLogTimestamp) => {
+        const userLogs = dieterLogs.filter(l => l.author === author && l.timestamp < currentLogTimestamp).sort((a,b) => b.timestamp - a.timestamp);
+        return userLogs.length > 0 ? userLogs[0].weight : null;
+      };
+
 
       const handleThrowAway = async () => {
         if (!trashText.trim()) return;
         setIsThrowing(true);
-        const text = trashText;
-        setTrashText('');
-        try {
-          await db.collection('trashedItems').add({ text, timestamp: Date.now() });
-        } catch (e) { console.error(e); }
+        const text = trashText; setTrashText('');
+        try { await db.collection('trashedItems').add({ text, timestamp: Date.now() }); } catch (e) { console.error(e); }
         setTimeout(() => setIsThrowing(false), 600);
       };
 
-      // --- 지출 계산 로직 (가계부 일별 보기용) ---
+      // --- 계산 로직 ---
       const dateExpenses = expenses.filter(exp => exp.date === financeDateString);
       const filteredExpenses = expenseFilter === 'ALL' ? dateExpenses : dateExpenses.filter(exp => exp.author === expenseFilter);
       const totalExpense = filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0);
@@ -330,7 +365,6 @@
         return acc;
       }, {});
 
-      // --- 달력 계산 로직 ---
       const calYear = currentCalDate.getFullYear();
       const calMonth = currentCalDate.getMonth();
       const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
@@ -343,7 +377,6 @@
         acc[exp.date] = (acc[exp.date] || 0) + exp.amount;
         return acc;
       }, {});
-
       const monthlyExpensesByCategory = calendarFilteredExpenses.reduce((acc, exp) => {
         if (!exp.timestamp) return acc;
         const expD = new Date(exp.timestamp);
@@ -354,7 +387,7 @@
       }, {});
       const totalMonthlyExpense = Object.values(monthlyExpensesByCategory).reduce((sum, val) => sum + val, 0);
 
-
+      // --- 랜더링 ---
       if (!isLoggedIn) {
         return (
           <div className="min-h-screen bg-rose-50 flex justify-center items-center p-5 w-full">
@@ -374,11 +407,13 @@
         <div className="min-h-screen bg-rose-50 flex justify-center text-gray-800 w-full">
           <div className="w-full max-w-md bg-white shadow-xl flex flex-col relative overflow-hidden h-screen">
             <header className="bg-rose-400 text-white p-5 rounded-b-2xl shadow-md z-10 flex justify-between items-center shrink-0">
-              <h1 className="text-2xl font-bold tracking-tight">감정 쓰레기통 🗑️</h1>
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">{activeTab === 'dieter' ? '무모한도전 🔥' : '감정 쓰레기통 🗑️'}</h1>
               <button onClick={() => setIsLoggedIn(false)} className="bg-white/20 px-3 py-1.5 rounded-full text-sm font-bold flex items-center gap-1.5 hover:bg-white/30 shrink-0 whitespace-nowrap"><Users size={14} /> {currentUser} <LogOut size={12} className="ml-1 opacity-70" /></button>
             </header>
 
             <main className="flex-1 overflow-y-auto p-5 pb-24 h-full relative">
+              
+              {/* 1. 예민함 탭 */}
               {activeTab === 'sensitivity' && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-bold mb-4 flex items-center text-rose-500"><Activity className="mr-2" /> 오늘의 예민함 지수</h2>
@@ -407,19 +442,15 @@
                 </div>
               )}
 
+              {/* 2. 식단 탭 */}
               {activeTab === 'lunch' && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-bold mb-4 flex items-center text-orange-500"><Camera className="mr-2" /> 식단 기록</h2>
-                  
-                  {/* 일별 네비게이터 추가 (날짜 이동) */}
                   <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100 my-4">
                     <button onClick={() => setMealDate(new Date(mealDate.getTime() - 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeft size={20} className="text-orange-500" /></button>
-                    <div className="text-center font-bold text-gray-800">
-                      {mealDateString === todayDate ? '오늘' : mealDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
-                    </div>
+                    <div className="text-center font-bold text-gray-800">{mealDateString === todayDate ? '오늘' : mealDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</div>
                     <button onClick={() => setMealDate(new Date(mealDate.getTime() + 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} className="text-orange-500" /></button>
                   </div>
-
                   <div className="bg-orange-50 rounded-2xl p-5 mb-6 border border-orange-100">
                     <div className="mb-4 relative">
                       {selectedImage ? (
@@ -430,7 +461,7 @@
                       ) : (
                         <label className="flex flex-col items-center justify-center w-full aspect-video border-2 border-dashed border-orange-300 rounded-xl bg-orange-100/50 cursor-pointer">
                           <ImageIcon className="text-orange-400 mb-2" size={32} /><span className="text-sm text-orange-600 font-medium">사진 등록</span>
-                          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, setSelectedImage)} />
                         </label>
                       )}
                     </div>
@@ -454,28 +485,19 @@
                         </div>
                       </div>
                     ))}
-                    {meals.filter(m => m.date === mealDateString && (mealFilter === 'ALL' || m.author === mealFilter)).length === 0 && (
-                      <div className="col-span-2 text-center py-8 text-gray-400 text-sm">
-                        이 날은 기록된 식사가 없어요! 🍽️
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
 
+              {/* 3. 가계부 탭 */}
               {activeTab === 'finance' && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-bold flex items-center text-blue-500"><Receipt className="mr-2" /> 가계부</h2>
-                  
-                  {/* 일별 네비게이터 추가 (날짜 이동) */}
                   <div className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100 my-4">
                     <button onClick={() => setFinanceDate(new Date(financeDate.getTime() - 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeft size={20} className="text-blue-500" /></button>
-                    <div className="text-center font-bold text-gray-800">
-                      {financeDateString === todayDate ? '오늘' : financeDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
-                    </div>
+                    <div className="text-center font-bold text-gray-800">{financeDateString === todayDate ? '오늘' : financeDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</div>
                     <button onClick={() => setFinanceDate(new Date(financeDate.getTime() + 86400000))} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronRight size={20} className="text-blue-500" /></button>
                   </div>
-
                   <div className="flex justify-center gap-2 mb-4">
                     {['ALL', '이서진', '이용상'].map(f => (
                       <button key={f} onClick={() => setExpenseFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${expenseFilter === f ? 'bg-blue-500 text-white shadow-md' : 'bg-blue-100 text-blue-500'}`}>{f === 'ALL' ? '전체' : f}</button>
@@ -494,19 +516,17 @@
                       </div>
                     )}
                   </div>
-                  
                   <div className="bg-blue-50 rounded-2xl p-4 mb-6 border border-blue-100">
                     <p className="text-xs text-blue-500 font-bold mb-2 ml-1">* 마트, 주유, 배달 등 키워드 자동 분류</p>
                     <div className="flex flex-col gap-2">
                       <input type="text" placeholder="어디에 썼어? (예: 코스트코, 주차비)" value={expensePlace} onChange={(e) => setExpensePlace(e.target.value)} className="w-full p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
                       <input type="text" placeholder="세부내용 (예: 장보기, 다이소)" value={expenseDetail} onChange={(e) => setExpenseDetail(e.target.value)} className="w-full p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
                       <div className="flex gap-2">
-                        <input type="text" placeholder="금액 (예: 10,000)" value={expenseAmount} onChange={handleAmountChange} className="flex-1 p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
+                        <input type="text" placeholder="금액 (예: 10,000)" value={expenseAmount} onChange={(e)=>handleAmountChange(e, setExpenseAmount)} className="flex-1 p-3 rounded-xl border border-blue-200 text-sm focus:outline-none focus:border-blue-400" />
                         <button onClick={handleAddExpense} className="bg-blue-500 hover:bg-blue-600 text-white px-5 rounded-xl transition-colors shrink-0"><Plus /></button>
                       </div>
                     </div>
                   </div>
-
                   <div className="space-y-3">
                     {filteredExpenses.map(exp => (
                       <div key={exp.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -515,7 +535,7 @@
                             <input type="text" value={editPlace} onChange={(e) => setEditPlace(e.target.value)} className="w-full p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="어디에 썼어?" />
                             <input type="text" value={editDetail} onChange={(e) => setEditDetail(e.target.value)} className="w-full p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="세부내용" />
                             <div className="flex gap-2">
-                              <input type="text" value={editAmount} onChange={handleEditAmountChange} className="flex-1 p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="금액" />
+                              <input type="text" value={editAmount} onChange={(e)=>handleAmountChange(e, setEditAmount)} className="flex-1 p-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:border-blue-400" placeholder="금액" />
                               <button onClick={() => handleUpdateExpense(exp.id)} className="bg-green-500 hover:bg-green-600 text-white px-3 rounded-lg transition-colors shrink-0"><Check size={18} /></button>
                               <button onClick={() => setEditingExpenseId(null)} className="bg-gray-400 hover:bg-gray-500 text-white px-3 rounded-lg transition-colors shrink-0"><X size={18} /></button>
                             </div>
@@ -542,45 +562,31 @@
                         )}
                       </div>
                     ))}
-                    {filteredExpenses.length === 0 && (
-                      <div className="text-center py-8 text-gray-400 text-sm">지출이 없어요! 👏</div>
-                    )}
+                    {filteredExpenses.length === 0 && <div className="text-center py-8 text-gray-400 text-sm">지출이 없어요! 👏</div>}
                   </div>
                 </div>
               )}
 
+              {/* 4. 달력 탭 */}
               {activeTab === 'calendar' && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-500"><CalendarIcon className="mr-2" /> 지출 달력</h2>
-                  
                   <div className="flex justify-center gap-2 mb-4">
                     {['ALL', '이서진', '이용상'].map(f => (
-                      <button 
-                        key={f} 
-                        onClick={() => setCalendarFilter(f)} 
-                        className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${calendarFilter === f ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-200'}`}
-                      >
-                        {f === 'ALL' ? '전체 보기' : `${f} 지출`}
-                      </button>
+                      <button key={f} onClick={() => setCalendarFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${calendarFilter === f ? 'bg-indigo-500 text-white shadow-md' : 'bg-indigo-100 text-indigo-500 hover:bg-indigo-200'}`}>{f === 'ALL' ? '전체 보기' : `${f} 지출`}</button>
                     ))}
                   </div>
-
                   <div className="bg-indigo-500 text-white rounded-2xl p-5 mb-5 shadow-md">
                     <p className="text-indigo-100 text-sm mb-1">{calYear}년 {calMonth + 1}월 {calendarFilter === 'ALL' ? '총' : calendarFilter} 지출액</p>
                     <div className="text-3xl font-extrabold mb-4">{totalMonthlyExpense.toLocaleString()} <span className="text-lg font-medium">원</span></div>
                     {Object.keys(monthlyExpensesByCategory).length > 0 ? (
                       <div className="grid grid-cols-2 gap-2 text-xs bg-indigo-600/50 p-3 rounded-xl">
                         {Object.entries(monthlyExpensesByCategory).map(([cat, amt]) => (
-                          <div key={cat} className="flex justify-between items-center gap-1 min-w-0">
-                            <span className="text-indigo-200 truncate">{cat}</span><span className="font-bold whitespace-nowrap shrink-0">{amt.toLocaleString()}원</span>
-                          </div>
+                          <div key={cat} className="flex justify-between items-center gap-1 min-w-0"><span className="text-indigo-200 truncate">{cat}</span><span className="font-bold whitespace-nowrap shrink-0">{amt.toLocaleString()}원</span></div>
                         ))}
                       </div>
-                    ) : (
-                      <div className="text-xs text-indigo-200 italic">이번 달 지출 내역이 없습니다.</div>
-                    )}
+                    ) : <div className="text-xs text-indigo-200 italic">이번 달 지출 내역이 없습니다.</div>}
                   </div>
-
                   <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6">
                     <div className="flex justify-between items-center mb-4">
                       <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><ChevronLeft size={20} /></button>
@@ -596,11 +602,7 @@
                         const dateStr = new Date(calYear, calMonth, i + 1).toLocaleDateString('ko-KR');
                         const exp = expensesByDate[dateStr] || 0;
                         return (
-                          <div 
-                            key={i} 
-                            onClick={() => setSelectedDate(dateStr)}
-                            className={`aspect-[4/5] border rounded-lg p-0.5 flex flex-col cursor-pointer transition-colors ${dateStr === todayDate ? 'bg-indigo-50 border-indigo-200' : 'border-transparent bg-gray-50 hover:border-indigo-300'}`}
-                          >
+                          <div key={i} onClick={() => setSelectedDate(dateStr)} className={`aspect-[4/5] border rounded-lg p-0.5 flex flex-col cursor-pointer transition-colors ${dateStr === todayDate ? 'bg-indigo-50 border-indigo-200' : 'border-transparent bg-gray-50 hover:border-indigo-300'}`}>
                             <span className={`text-[10px] ${dateStr === todayDate ? 'text-indigo-600 font-bold' : 'text-gray-500'}`}>{i+1}</span>
                             {exp > 0 && <span className="mt-auto text-[8px] font-bold text-blue-500 truncate text-center pb-0.5">-{exp.toLocaleString()}</span>}
                           </div>
@@ -611,7 +613,7 @@
                 </div>
               )}
 
-              {/* 일별 지출 상세 모달 */}
+              {/* 달력 모달 */}
               {selectedDate && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-5" onClick={() => setSelectedDate(null)}>
                   <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl animate-fade-in max-h-[80vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
@@ -625,25 +627,148 @@
                           <div key={exp.id} className="flex justify-between items-center bg-gray-50 p-3.5 rounded-xl border border-gray-100 gap-2">
                             <div className="flex items-center gap-2 overflow-hidden">
                               <span className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-md text-white whitespace-nowrap ${exp.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{exp.author}</span>
-                              <div className="min-w-0">
-                                <p className="font-bold text-sm text-gray-800 truncate">
-                                  {exp.place || exp.item}
-                                  {exp.detail && <span className="text-[11px] text-gray-500 font-normal ml-1 shrink-0">({exp.detail})</span>}
-                                  <span className="shrink-0 text-[10px] bg-white border border-gray-200 text-gray-500 px-1.5 py-0.5 rounded ml-1 whitespace-nowrap inline-block">{exp.category}</span>
-                                </p>
-                              </div>
+                              <div className="min-w-0"><p className="font-bold text-sm text-gray-800 truncate">{exp.place || exp.item}{exp.detail && <span className="text-[11px] text-gray-500 font-normal ml-1 shrink-0">({exp.detail})</span>}<span className="shrink-0 text-[10px] bg-white border border-gray-200 text-gray-500 px-1.5 py-0.5 rounded ml-1 whitespace-nowrap inline-block">{exp.category}</span></p></div>
                             </div>
                             <span className="shrink-0 font-bold text-blue-500 text-sm whitespace-nowrap">-{exp.amount.toLocaleString()}원</span>
                           </div>
                         ))
-                      ) : (
-                        <div className="text-center py-10 text-gray-400 text-sm">이 날은 지출이 없어요! 👍</div>
-                      )}
+                      ) : <div className="text-center py-10 text-gray-400 text-sm">이 날은 지출이 없어요! 👍</div>}
                     </div>
                   </div>
                 </div>
               )}
 
+              {/* 5. 다이어터 (새로운 탭) */}
+              {activeTab === 'dieter' && (
+                <div className="animate-fade-in">
+                  <h2 className="text-xl font-bold mb-4 flex items-center text-teal-600"><Dumbbell className="mr-2" /> 다이어터 일지</h2>
+                  
+                  <div className="flex justify-center gap-2 mb-4">
+                    {['ALL', '이서진', '이용상'].map(f => (
+                      <button key={f} onClick={() => setDieterFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors whitespace-nowrap ${dieterFilter === f ? 'bg-teal-600 text-white shadow-md' : 'bg-teal-50 text-teal-600 hover:bg-teal-100'}`}>{f === 'ALL' ? '전체' : f}</button>
+                    ))}
+                  </div>
+
+                  {/* 목표 설정 및 현황 영역 (현재 접속한 사용자 기준) */}
+                  {!dieterGoals[currentUser] ? (
+                    <div className="bg-teal-50 rounded-2xl p-5 mb-6 border border-teal-100">
+                      <p className="text-sm font-bold text-teal-800 mb-3">{currentUser}님의 다이어트 목표 설정하기</p>
+                      <div className="flex gap-2 mb-2">
+                        <input type="number" placeholder="현재 몸무게 (kg)" value={goalStartWeight} onChange={e => setGoalStartWeight(e.target.value)} className="w-1/2 p-3 rounded-xl border border-teal-200 text-sm focus:outline-none focus:border-teal-400" />
+                        <input type="number" placeholder="목표 몸무게 (kg)" value={goalTargetWeight} onChange={e => setGoalTargetWeight(e.target.value)} className="w-1/2 p-3 rounded-xl border border-teal-200 text-sm focus:outline-none focus:border-teal-400" />
+                      </div>
+                      <input type="date" value={goalTargetDate} onChange={e => setGoalTargetDate(e.target.value)} className="w-full p-3 rounded-xl border border-teal-200 text-sm focus:outline-none focus:border-teal-400 mb-3" />
+                      <button onClick={handleSetDieterGoal} className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 rounded-xl transition-colors">도전 시작하기! 🔥</button>
+                    </div>
+                  ) : (
+                    <div className="bg-teal-600 text-white rounded-2xl p-5 mb-6 shadow-md relative overflow-hidden">
+                      <div className="absolute -right-4 -top-4 opacity-10"><Dumbbell size={100} /></div>
+                      <div className="relative z-10">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-bold text-sm bg-teal-700 px-2 py-1 rounded-md">{currentUser} 진행중</span>
+                          <span className="font-extrabold text-teal-200 text-lg">{calculateDDay(dieterGoals[currentUser].targetDate)}</span>
+                        </div>
+                        <p className="text-3xl font-black mb-1">목표: {dieterGoals[currentUser].targetWeight}kg</p>
+                        <p className="text-sm text-teal-100">시작 몸무게: {dieterGoals[currentUser].startWeight}kg</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 매일 기록 입력폼 */}
+                  <div className="bg-white rounded-2xl p-5 mb-6 shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-gray-800 mb-3 text-sm">오늘 아침 눈바디 & 체중 기록</h3>
+                    
+                    <div className="mb-4 relative">
+                      {dieterImage ? (
+                        <div className="relative rounded-xl overflow-hidden aspect-[3/4] bg-gray-100 max-h-60 mx-auto">
+                          <img src={dieterImage} className="w-full h-full object-cover" />
+                          <button onClick={() => setDieterImage(null)} className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-full"><X size={20} /></button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full aspect-[4/3] border-2 border-dashed border-teal-300 rounded-xl bg-teal-50/50 cursor-pointer hover:bg-teal-50 transition-colors">
+                          <Camera className="text-teal-400 mb-2" size={32} /><span className="text-sm text-teal-600 font-medium">눈바디/체중계 사진 등록</span>
+                          <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, setDieterImage)} />
+                        </label>
+                      )}
+                    </div>
+                    
+                    <div className="flex gap-2 mb-3">
+                      <input type="number" placeholder="오늘 몸무게 (kg)" step="0.1" value={dieterWeightInput} onChange={e => setDieterWeightInput(e.target.value)} className="flex-1 p-3 rounded-xl border border-gray-200 focus:outline-none focus:border-teal-400" />
+                    </div>
+                    
+                    <label className="flex items-center gap-2 mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer">
+                      <input type="checkbox" checked={dieterWorkoutChecked} onChange={(e) => setDieterWorkoutChecked(e.target.checked)} className="w-5 h-5 accent-teal-500 rounded" />
+                      <span className="font-bold text-gray-700 text-sm">오늘 오운완 (운동 완료) 했습니까? 💦</span>
+                    </label>
+
+                    <button onClick={handleAddDieterLog} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm">오늘 기록 저장</button>
+                  </div>
+
+                  {/* 다이어트 기록 리스트 */}
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-gray-700 ml-1 text-sm">기록 모아보기</h3>
+                    {dieterLogs.filter(l => dieterFilter === 'ALL' || l.author === dieterFilter).map(log => {
+                      const prevWeight = getPreviousWeight(log.author, log.timestamp);
+                      const diffFromPrev = prevWeight ? (log.weight - prevWeight).toFixed(1) : 0;
+                      const goalInfo = dieterGoals[log.author];
+                      const diffFromGoal = goalInfo ? (log.weight - goalInfo.targetWeight).toFixed(1) : null;
+
+                      return (
+                        <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative">
+                          <button onClick={() => handleDelete('dieterLogs', log.id)} className="absolute top-3 right-3 text-gray-300 hover:text-red-500 p-1"><X size={16} /></button>
+                          
+                          <div className="flex gap-4">
+                            {/* 사진 영역 */}
+                            <div className="w-24 h-32 shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                              {log.image ? <img src={log.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><ImageIcon /></div>}
+                            </div>
+                            
+                            {/* 정보 영역 */}
+                            <div className="flex-1 flex flex-col justify-center min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${log.author === '이서진' ? 'bg-rose-400' : 'bg-blue-400'}`}>{log.author}</span>
+                                <span className="text-[11px] text-gray-500">{log.date} {log.time}</span>
+                              </div>
+                              
+                              <div className="text-2xl font-black text-gray-800 mb-2">
+                                {log.weight}<span className="text-sm font-normal ml-1">kg</span>
+                              </div>
+                              
+                              <div className="space-y-1">
+                                {prevWeight && (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <span className="text-gray-500 w-16">전일 대비:</span>
+                                    <span className={`font-bold ${diffFromPrev > 0 ? 'text-red-500' : diffFromPrev < 0 ? 'text-blue-500' : 'text-gray-500'}`}>
+                                      {diffFromPrev > 0 ? `+${diffFromPrev}kg 🥲` : diffFromPrev < 0 ? `${diffFromPrev}kg 🎉` : '유지 (휴~)'}
+                                    </span>
+                                  </div>
+                                )}
+                                {goalInfo && (
+                                  <div className="flex items-center gap-1 text-xs">
+                                    <span className="text-gray-500 w-16">목표까지:</span>
+                                    <span className="font-bold text-teal-600">{diffFromGoal > 0 ? `${diffFromGoal}kg 남음!` : '목표 달성!!! 🏆'}</span>
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {log.workoutDone && (
+                                <div className="mt-2 inline-block bg-teal-100 text-teal-700 text-[10px] font-bold px-2 py-1 rounded-full border border-teal-200 w-max">
+                                  🔥 오운완 달성!
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {dieterLogs.filter(l => dieterFilter === 'ALL' || l.author === dieterFilter).length === 0 && (
+                      <div className="text-center py-8 text-gray-400 text-sm">아직 다이어트 기록이 없습니다!</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 6. 쓰레기통 탭 */}
               {activeTab === 'trash' && (
                 <div className="animate-fade-in">
                   <h2 className="text-xl font-bold mb-4 flex items-center text-purple-500"><Trash2 className="mr-2" /> 감정 쓰레기통</h2>
@@ -660,12 +785,14 @@
               )}
             </main>
 
-            <nav className="bg-white border-t flex justify-around p-3 pb-safe absolute bottom-0 w-full z-20 shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
-              <button onClick={() => setActiveTab('sensitivity')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='sensitivity'?'text-rose-500':'text-gray-400 hover:text-gray-600'}`}><Activity /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">예민함</span></button>
-              <button onClick={() => setActiveTab('lunch')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='lunch'?'text-orange-500':'text-gray-400 hover:text-gray-600'}`}><Camera /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">식단</span></button>
-              <button onClick={() => setActiveTab('finance')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='finance'?'text-blue-500':'text-gray-400 hover:text-gray-600'}`}><Receipt /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">가계부</span></button>
-              <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='calendar'?'text-indigo-500':'text-gray-400 hover:text-gray-600'}`}><CalendarIcon /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">달력</span></button>
-              <button onClick={() => setActiveTab('trash')} className={`flex flex-col items-center p-1 transition-colors ${activeTab==='trash'?'text-purple-500':'text-gray-400 hover:text-gray-600'}`}><Trash2 /><span className="text-[10px] mt-1 font-medium whitespace-nowrap">버리기</span></button>
+            {/* 네비게이션을 6칸으로 균등 분할 */}
+            <nav className="bg-white border-t grid grid-cols-6 p-2 pb-safe absolute bottom-0 w-full z-20 shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+              <button onClick={() => setActiveTab('sensitivity')} className={`flex flex-col items-center justify-center p-1 transition-colors ${activeTab==='sensitivity'?'text-rose-500':'text-gray-400 hover:text-gray-600'}`}><Activity size={22}/><span className="text-[9px] sm:text-[10px] mt-1 font-bold whitespace-nowrap tracking-tighter">예민함</span></button>
+              <button onClick={() => setActiveTab('lunch')} className={`flex flex-col items-center justify-center p-1 transition-colors ${activeTab==='lunch'?'text-orange-500':'text-gray-400 hover:text-gray-600'}`}><Camera size={22}/><span className="text-[9px] sm:text-[10px] mt-1 font-bold whitespace-nowrap tracking-tighter">식단</span></button>
+              <button onClick={() => setActiveTab('finance')} className={`flex flex-col items-center justify-center p-1 transition-colors ${activeTab==='finance'?'text-blue-500':'text-gray-400 hover:text-gray-600'}`}><Receipt size={22}/><span className="text-[9px] sm:text-[10px] mt-1 font-bold whitespace-nowrap tracking-tighter">가계부</span></button>
+              <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center justify-center p-1 transition-colors ${activeTab==='calendar'?'text-indigo-500':'text-gray-400 hover:text-gray-600'}`}><CalendarIcon size={22}/><span className="text-[9px] sm:text-[10px] mt-1 font-bold whitespace-nowrap tracking-tighter">달력</span></button>
+              <button onClick={() => setActiveTab('dieter')} className={`flex flex-col items-center justify-center p-1 transition-colors ${activeTab==='dieter'?'text-teal-600':'text-gray-400 hover:text-gray-600'}`}><Dumbbell size={22}/><span className="text-[9px] sm:text-[10px] mt-1 font-bold whitespace-nowrap tracking-tighter">다이어터</span></button>
+              <button onClick={() => setActiveTab('trash')} className={`flex flex-col items-center justify-center p-1 transition-colors ${activeTab==='trash'?'text-purple-500':'text-gray-400 hover:text-gray-600'}`}><Trash2 size={22}/><span className="text-[9px] sm:text-[10px] mt-1 font-bold whitespace-nowrap tracking-tighter">버리기</span></button>
             </nav>
           </div>
         </div>
