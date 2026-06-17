@@ -14,7 +14,11 @@
   
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
+<script>
+    Babel.registerPreset('react-classic', {
+        presets: [[Babel.availablePresets['react'], { runtime: 'classic' }]]
+    });
+</script>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
@@ -43,7 +47,7 @@
 <body class="bg-gray-100">
   <div id="root"></div>
 
-  <script type="text/babel">
+  <script type="text/babel" data-type="module" data-presets="react-classic">
     const { useState, useEffect } = React;
 
     // --- Firebase 초기화 및 설정 ---
